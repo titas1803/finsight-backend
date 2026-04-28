@@ -21,7 +21,16 @@ export enum Category {
   BILLS = 'bills',
   SALARY = 'salary',
   DIVIDEND = 'dividend',
+  INVESTMENT = 'investment',
   OTHER = 'other',
+}
+
+export enum PaymentModes {
+  UPI = 'upi',
+  CREDIT_CARD = 'credit-card',
+  DEBIT_CARD = 'debit-card',
+  CASH = 'cash',
+  ONLINE_BANKING = 'online-banking',
 }
 
 @Entity('transactions')
@@ -34,6 +43,9 @@ export class TransactionEntity {
 
   @Column()
   description?: string;
+
+  @Column({ type: 'enum', enum: PaymentModes })
+  paymentMode!: PaymentModes;
 
   @Column({ type: 'enum', enum: Category })
   category!: Category;
