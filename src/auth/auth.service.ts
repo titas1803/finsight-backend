@@ -75,4 +75,27 @@ export class AuthService {
 
     return await this.authUtils.verifyLogIn(password, user);
   }
+
+  async updatePassword(id: string, oldPassword: string, newPassword: string) {
+    const userExists = await this.userRepo.findOne({
+      where: { id },
+      relations: ['credential'],
+    });
+
+    if (!userExists) throw new BadRequestException('Invalid user');
+
+    const isMatch = await this.authUtils.comparePassword(
+      oldPassword,
+      userExists.credential.password,
+    );
+
+    if (!isMatch) throw new UnauthorizedException("Old password didn't match");
+
+    const hashedPassword = await this.authUtils.hashPassword(newPassword);
+
+    userExists.credential.password = hashedPassword;
+    await this.userRepo.save(userExists);
+
+    return { message: 'Password updated successfully' };
+  }
 }
