@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -52,27 +53,26 @@ export class AuthService {
   }
 
   async loginUser(loginDto: LoginDto) {
-    const { email, password } = loginDto;
+    const { email, phoneNumber, password } = loginDto;
 
-    const user = await this.userRepo.findOne({
-      where: { email },
-      relations: ['credential'],
-    });
-    if (!user) throw new UnauthorizedException("Email address doesn't exist");
+    let user: UserEntity | null = null;
 
-    const isMatch = await this.authUtils.comparePassword(
-      password,
-      user.credential.password,
-    );
-
-    if (!isMatch) {
-      throw new UnauthorizedException('Invalid email or password');
+    if (email) {
+      user = await this.userRepo.findOne({
+        where: { email },
+        relations: ['credential'],
+      });
+      if (!user) throw new UnauthorizedException("Email address doesn't exist");
+    } else if (phoneNumber) {
+      user = await this.userRepo.findOne({
+        where: { phoneNumber },
+        relations: ['credential'],
+      });
+      if (!user) throw new UnauthorizedException("Email address doesn't exist");
+    } else {
+      throw new BadRequestException('Provide either email or phone number');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { credential: _, ...filterUser } = user;
-
-    const tokens = this.authUtils.generateJwtTokens(filterUser);
-    return { message: 'Login successful!', user: filterUser, ...tokens };
+    return await this.authUtils.verifyLogIn(password, user);
   }
 }

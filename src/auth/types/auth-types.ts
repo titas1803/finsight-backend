@@ -6,4 +6,4 @@ export type JwtPayloadType = {
   role: UserRole;
 };
 
-export type UserDetailType = Omit<UserEntity, 'credential'>;
+export type UserDetailType = Omit<UserEntity, 'credential' | 'transactions'>;

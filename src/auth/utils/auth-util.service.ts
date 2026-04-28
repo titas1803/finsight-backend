@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
 import { JwtPayloadType, UserDetailType } from '../types/auth-types';
+import { UserEntity } from '@/entities/user.entity';
 
 @Injectable()
 export class AuthUtilService {
@@ -59,5 +60,22 @@ export class AuthUtilService {
       accessToken: this.generateAccessToken(user),
       refreshToke: this.generateRefreshToken(user),
     };
+  }
+
+  async verifyLogIn(enteredPassword: string, user: UserEntity) {
+    const isMatch = await this.comparePassword(
+      enteredPassword,
+      user.credential.password,
+    );
+
+    if (!isMatch) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { credential: _, ...filterUser } = user;
+
+    const tokens = this.generateJwtTokens(filterUser);
+    return { message: 'Login successful!', user: filterUser, ...tokens };
   }
 }

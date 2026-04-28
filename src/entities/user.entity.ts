@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -26,9 +27,11 @@ export class UserEntity {
   @Column({ length: 50 })
   lastName?: string;
 
+  @Index()
   @Column({ length: 100, unique: true })
   email!: string;
 
+  @Index()
   @Column({ length: 10, unique: true, default: null })
   phoneNumber?: string;
 
