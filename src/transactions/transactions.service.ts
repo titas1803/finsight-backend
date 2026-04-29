@@ -1,11 +1,14 @@
-import { TransactionEntity } from '@/entities/transactions.entity';
+import {
+  TransactionEntity,
+  TransactionType,
+} from '@/entities/transactions.entity';
 import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { TransactionDto } from './dto/transaction.dto';
+import { TransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
 import { UserEntity } from '@/entities/user.entity';
 import { Repository } from 'typeorm';
 import { TransactionFiltersType } from './types/transaction.type';
@@ -29,7 +32,9 @@ export class TransactionsService {
       user,
     });
 
-    const savedTransaction = await this.transactionRepo.save(newTransaction);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { user: _, ...savedTransaction } =
+      await this.transactionRepo.save(newTransaction);
 
     return {
       message: `New transaction of ${savedTransaction.amount} is added`,
@@ -37,10 +42,18 @@ export class TransactionsService {
     };
   }
 
-  async findTransactionById(transactionId: string, userId: string) {
+  private async findById(transactionId: string, userId: string) {
     const transaction = await this.transactionRepo.findOne({
       where: { id: transactionId, user: { id: userId } },
     });
+
+    if (!transaction) throw new NotFoundException('No transaction found');
+
+    return transaction;
+  }
+
+  async findTransactionById(transactionId: string, userId: string) {
+    const transaction = await this.findById(transactionId, userId);
 
     if (!transaction) throw new NotFoundException('No transaction found');
 
@@ -120,9 +133,122 @@ export class TransactionsService {
 
     const [transactions, count] = await query.getManyAndCount();
     return {
-      message: `${count} transactions added`,
+      message: `${count} transactions found`,
       count,
       transactions,
+    };
+  }
+
+  async updateTransaction(
+    transactionId: string,
+    userId: string,
+    updateTransactionDto: UpdateTransactionDto,
+  ) {
+    const existingTransaction = await this.findById(transactionId, userId);
+
+    const updateResult = await this.transactionRepo.update(
+      [{ id: transactionId }, { user: { id: userId } }],
+      {
+        amount: updateTransactionDto.amount ?? existingTransaction.amount,
+        category: updateTransactionDto.category ?? existingTransaction.category,
+        date: updateTransactionDto.date ?? existingTransaction.date,
+        type: updateTransactionDto.type ?? existingTransaction.type,
+        paymentMode:
+          updateTransactionDto.paymentMode ?? existingTransaction.paymentMode,
+        description:
+          updateTransactionDto.description ?? updateTransactionDto.description,
+      },
+    );
+
+    return {
+      message: `${updateResult.affected} transaction data updated`,
+      count: updateResult.affected,
+    };
+  }
+
+  async deleteTransaction(transactionid: string, userId: string) {
+    const deletedTransaction = await this.transactionRepo.delete([
+      { id: transactionid },
+      { user: { id: userId } },
+    ]);
+
+    if (!deletedTransaction.affected)
+      throw new NotFoundException(
+        "Either transaction not found or you don't have enough permission",
+      );
+
+    return {
+      message: `${deletedTransaction.affected} transaction records deleted`,
+      count: deletedTransaction.affected,
+    };
+  }
+
+  async getTransactionsSummary(
+    userId: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    const dbAlias = 'transaction';
+    const query = this.transactionRepo
+      .createQueryBuilder(dbAlias)
+      .select(
+        `SUM(CASE WHEN ${dbAlias}.type = :income THEN ${dbAlias}.amount ELSE 0 END)`,
+        'totalIncome',
+      )
+      .addSelect(
+        `SUM(CASE WHEN ${dbAlias}.type = :expense THEN ${dbAlias}.amount ELSE 0 END)`,
+        'totalExpense',
+      )
+      .addSelect(
+        `SUM(CASE WHEN ${dbAlias}.type = :investment THEN ${dbAlias}.amount ELSE 0 END)`,
+        'totalInvestment',
+      )
+      .addSelect(`COUNT(${dbAlias}.id)`, 'transactionCount')
+      .setParameters({
+        income: TransactionType.INCOME,
+        expense: TransactionType.EXPENSE,
+        investment: TransactionType.INVESTMENT,
+      })
+      .where(`${dbAlias}.user.id = :userId`, { userId });
+
+    if (startDate && endDate) {
+      query.andWhere(`${dbAlias}.date BETWEEN :startDate AND :endDate`, {
+        startDate,
+        endDate,
+      });
+    } else if (startDate) {
+      query.andWhere(`${dbAlias}.date >= :startDate`, {
+        startDate,
+      });
+    } else if (endDate) {
+      query.andWhere(`${dbAlias}.date <= :endDate`, {
+        endDate,
+      });
+    }
+
+    const result:
+      | {
+          totalIncome: string;
+          totalExpense: string;
+          totalInvestment: string;
+          transactionCount: string;
+        }
+      | undefined = await query.getRawOne();
+
+    if (!result) throw new NotFoundException('No transaction found');
+
+    const totalIncome = parseFloat(result.totalIncome) || 0;
+    const totalInvestment = parseFloat(result.totalInvestment) || 0;
+    const totalExpense = parseFloat(result.totalExpense) || 0;
+    const netbalance = totalIncome - totalInvestment - totalExpense;
+    const transactionCount = parseInt(result.transactionCount) || 0;
+
+    return {
+      totalIncome,
+      totalInvestment,
+      totalExpense,
+      netbalance,
+      transactionCount,
     };
   }
 }

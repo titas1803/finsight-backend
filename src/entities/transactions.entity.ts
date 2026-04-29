@@ -10,6 +10,30 @@ import { UserEntity } from './user.entity';
 export enum TransactionType {
   INCOME = 'income',
   EXPENSE = 'expense',
+  INVESTMENT = 'investment',
+}
+
+export enum IncomeCategory {
+  SALARY = 'salary',
+  DIVIDEND = 'dividend',
+  INVESTMENT = 'investment',
+}
+
+export enum InvestmentCategory {
+  STOCKS = 'stocks',
+  MUTUAL_FUND = 'MUTUAL_FUND',
+  PPF = 'ppf',
+  FD = 'fd',
+  INSURANCE = 'insurance',
+}
+
+export enum ExpenseCategory {
+  FOOD = 'food',
+  TRANSPORT = 'transport',
+  ENTERTAINMENT = 'entertainment',
+  HEALTH = 'health',
+  SHOPPING = 'shopping',
+  BILLS = 'bills',
 }
 
 export enum Category {
@@ -21,7 +45,11 @@ export enum Category {
   BILLS = 'bills',
   SALARY = 'salary',
   DIVIDEND = 'dividend',
-  INVESTMENT = 'investment',
+  STOCKS = 'stocks',
+  MUTUAL_FUND = 'mutual-fund',
+  PPF = 'ppf',
+  FD = 'fd',
+  INSURANCE = 'insurance',
   OTHER = 'other',
 }
 
