@@ -14,23 +14,30 @@ import { JwtAuthGuard } from '@/users/guards/jwt-auth.guard';
 import { Currentuser } from './decorators/current-user.decorator';
 import { PasswordDto } from './dto/password.dto';
 import { type UserDetailType } from './types/auth-types';
+import { RefreshTokenDto } from './dto/refreshToken.dto';
+import { AuthUrls } from './utils/auth.enum';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
+  @Post(AuthUrls.REGISTER)
   @HttpCode(HttpStatus.CREATED)
   async createUser(@Body() registerDto: RegisterDto) {
     return await this.authService.createUser(registerDto);
   }
 
-  @Post('login')
+  @Post(AuthUrls.LOGIN)
   async loginUser(@Body() loginDto: LoginDto) {
     return await this.authService.loginUser(loginDto);
   }
 
-  @Patch('update-password')
+  @Post(AuthUrls.REFRESHTOKEN)
+  async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
+    return await this.authService.refreshTokens(refreshTokenDto.refreshToken);
+  }
+
+  @Patch(AuthUrls.UPDATEPASSWORD)
   @UseGuards(JwtAuthGuard)
   async updatePassword(
     @Currentuser() userInfo: UserDetailType,

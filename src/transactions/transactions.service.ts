@@ -1,8 +1,6 @@
+import { TransactionEntity } from '@/entities/transactions.entity';
 import {
-  TransactionEntity,
-  TransactionType,
-} from '@/entities/transactions.entity';
-import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -12,6 +10,7 @@ import { TransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
 import { UserEntity } from '@/entities/user.entity';
 import { Repository } from 'typeorm';
 import { TransactionFiltersType } from './types/transaction.type';
+import { TransactionType, Category } from './utils/transaction.enum';
 
 @Injectable()
 export class TransactionsService {
@@ -147,7 +146,7 @@ export class TransactionsService {
     const existingTransaction = await this.findById(transactionId, userId);
 
     const updateResult = await this.transactionRepo.update(
-      [{ id: transactionId }, { user: { id: userId } }],
+      { id: transactionId, user: { id: userId } },
       {
         amount: updateTransactionDto.amount ?? existingTransaction.amount,
         category: updateTransactionDto.category ?? existingTransaction.category,
@@ -156,7 +155,7 @@ export class TransactionsService {
         paymentMode:
           updateTransactionDto.paymentMode ?? existingTransaction.paymentMode,
         description:
-          updateTransactionDto.description ?? updateTransactionDto.description,
+          updateTransactionDto.description ?? existingTransaction.description,
       },
     );
 
@@ -249,6 +248,108 @@ export class TransactionsService {
       totalExpense,
       netbalance,
       transactionCount,
+    };
+  }
+
+  async getTransactionByTypeAndCategory(
+    userId: string,
+    type: TransactionType,
+    category?: Category,
+  ) {
+    const dbAlias = 'transaction';
+    const query = this.transactionRepo
+      .createQueryBuilder(dbAlias)
+      .select(`${dbAlias}.category`, 'category')
+      .addSelect(`SUM(${dbAlias}.amount)`, 'total')
+      .addSelect(`COUNT(${dbAlias}.id)`, 'count')
+      .where(`${dbAlias}.user = :userId`, { userId })
+      .andWhere(`${dbAlias}.type = :type`, { type })
+      .groupBy(`${dbAlias}.category`)
+      .orderBy('total', 'DESC');
+
+    const total: { total: string } | undefined = await this.transactionRepo
+      .createQueryBuilder(dbAlias)
+      .select(`SUM(${dbAlias}.amount)`, 'total')
+      .where(`${dbAlias}.user = :userId`, { userId })
+      .andWhere(`${dbAlias}.type = :type`, { type })
+      .getRawOne();
+
+    if (category) {
+      query.andWhere(`${dbAlias}.category = :category`, { category });
+    }
+
+    const rows: { category: string; total: string; count: string }[] =
+      await query.getRawMany();
+
+    if (rows.length === 0)
+      throw new NotFoundException(
+        category
+          ? `No ${type}s found for category: ${category}`
+          : `No ${type}s transactions found`,
+      );
+
+    if (!total || parseFloat(total.total) === 0)
+      throw new NotFoundException(`No transaction found for type: ${type}`);
+
+    return rows.map((row) => ({
+      category: row.category,
+      total: parseFloat(row.total),
+      percentage: (
+        (parseFloat(row.total) / parseFloat(total.total)) *
+        100
+      ).toFixed(2),
+      count: parseInt(row.count),
+    }));
+  }
+
+  private async;
+  async getLastSpecificDays(
+    userId: string,
+    numberOfDays: 'week' | 'month' | 'year' = 'week',
+  ) {
+    const today = new Date();
+
+    const daysAgo = new Date();
+
+    // Format to YYYY-MM-DD to match your date column type
+    const toDateString = (date: Date) => date.toISOString().split('T')[0];
+
+    switch (numberOfDays) {
+      case 'week':
+        daysAgo.setDate(today.getDate() - 7);
+        break;
+
+      case 'month':
+        daysAgo.setDate(today.getMonth() - 1);
+        break;
+
+      case 'year':
+        daysAgo.setFullYear(today.getFullYear() - 1);
+        break;
+      default:
+        throw new BadRequestException(
+          'You can check insight of transactions of just last 1 week or 1 month or 1 year from today',
+        );
+    }
+
+    const dbAlias = 'transaction';
+    const [transactions, count] = await this.transactionRepo
+      .createQueryBuilder(dbAlias)
+      .where(`${dbAlias}.user = :userId`, { userId })
+      .andWhere(`${dbAlias}.date BETWEEN :startDate and :endDate`, {
+        startDate: toDateString(daysAgo),
+        endDate: toDateString(today),
+      })
+      .orderBy(`${dbAlias}.date`, 'DESC')
+      .getManyAndCount();
+
+    if (!count)
+      throw new NotFoundException(`No data found for last 1 ${numberOfDays}`);
+
+    return {
+      message: `${count} results found`,
+      count,
+      transactions,
     };
   }
 }

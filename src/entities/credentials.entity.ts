@@ -15,6 +15,9 @@ export class CredentialsEntity {
   @Column()
   password!: string;
 
+  @Column({ type: 'text', nullable: true, default: null })
+  refreshToken?: string | null;
+
   @OneToOne(() => UserEntity, (user) => user.credential)
   @JoinColumn() // foreign key lives here
   user!: UserEntity;

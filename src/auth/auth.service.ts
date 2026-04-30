@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,12 +11,17 @@ import { UserEntity } from '../entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthUtilService } from './utils/auth-util.service';
 import { LoginDto } from './dto/login.dto';
+import { CredentialsEntity } from '@/entities/credentials.entity';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+
+    @InjectRepository(CredentialsEntity)
+    private readonly credentialRepo: Repository<CredentialsEntity>,
+
     private readonly authUtils: AuthUtilService,
   ) {}
   async createUser(registerDto: RegisterDto) {
@@ -34,7 +40,7 @@ export class AuthService {
         throw new ConflictException('Phone number already exists');
     }
 
-    const hashPassword = await this.authUtils.hashPassword(password);
+    const hashPassword = await this.authUtils.encryptPassword(password);
 
     const createNewUser = this.userRepo.create({
       firstName,
@@ -73,7 +79,18 @@ export class AuthService {
       throw new BadRequestException('Provide either email or phone number');
     }
 
-    return await this.authUtils.verifyLogIn(password, user);
+    const result = await this.authUtils.verifyLogIn(password, user);
+
+    const encryptedRefreshToken = await this.authUtils.encryptRefreshToken(
+      result.refreshToken,
+    );
+
+    await this.credentialRepo.update(
+      { user: { id: user.id } },
+      { refreshToken: encryptedRefreshToken },
+    );
+
+    return result;
   }
 
   async updatePassword(id: string, oldPassword: string, newPassword: string) {
@@ -91,11 +108,72 @@ export class AuthService {
 
     if (!isMatch) throw new UnauthorizedException("Old password didn't match");
 
-    const hashedPassword = await this.authUtils.hashPassword(newPassword);
+    const hashedPassword = await this.authUtils.encryptPassword(newPassword);
 
     userExists.credential.password = hashedPassword;
     await this.userRepo.save(userExists);
 
     return { message: 'Password updated successfully' };
+  }
+
+  async refreshTokens(incomingRefreshToken: string) {
+    const payload = this.authUtils.verifyRefreshToken(incomingRefreshToken);
+
+    const user = await this.userRepo.findOne({
+      where: { id: payload.userId },
+      relations: ['credential'],
+      select: {
+        id: true,
+        role: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phoneNumber: true,
+        createdAt: true,
+        updatedAt: true,
+        credential: {
+          refreshToken: true,
+        },
+      },
+    });
+
+    if (!user || !user.credential.refreshToken) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const isValidToken = await this.authUtils.comparePassword(
+      incomingRefreshToken,
+      user.credential.refreshToken,
+    );
+
+    if (!isValidToken) throw new UnauthorizedException('Invalid refresh token');
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { credential: _, ...filteredUser } = user;
+
+    const token = this.authUtils.generateJwtTokens(filteredUser);
+
+    const encryptedRefreshToken = await this.authUtils.encryptRefreshToken(
+      token.refreshToken,
+    );
+
+    await this.credentialRepo.update(
+      { user: { id: user.id } },
+      { refreshToken: encryptedRefreshToken },
+    );
+
+    return {
+      message: 'Tokens refreshed successfully',
+      ...token,
+    };
+  }
+
+  async logOut(userId: string) {
+    await this.credentialRepo.update(
+      { user: { id: userId } },
+      { refreshToken: null },
+    );
+
+    return { message: 'Logged out successfully' };
   }
 }

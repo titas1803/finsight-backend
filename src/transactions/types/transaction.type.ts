@@ -1,8 +1,8 @@
 import {
-  Category,
   PaymentModes,
   TransactionType,
-} from '@/entities/transactions.entity';
+  Category,
+} from '../utils/transaction.enum';
 
 export type TransactionFiltersType = {
   startAmount?: string;

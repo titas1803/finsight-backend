@@ -6,60 +6,11 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
-
-export enum TransactionType {
-  INCOME = 'income',
-  EXPENSE = 'expense',
-  INVESTMENT = 'investment',
-}
-
-export enum IncomeCategory {
-  SALARY = 'salary',
-  DIVIDEND = 'dividend',
-  INVESTMENT = 'investment',
-}
-
-export enum InvestmentCategory {
-  STOCKS = 'stocks',
-  MUTUAL_FUND = 'MUTUAL_FUND',
-  PPF = 'ppf',
-  FD = 'fd',
-  INSURANCE = 'insurance',
-}
-
-export enum ExpenseCategory {
-  FOOD = 'food',
-  TRANSPORT = 'transport',
-  ENTERTAINMENT = 'entertainment',
-  HEALTH = 'health',
-  SHOPPING = 'shopping',
-  BILLS = 'bills',
-}
-
-export enum Category {
-  FOOD = 'food',
-  TRANSPORT = 'transport',
-  ENTERTAINMENT = 'entertainment',
-  HEALTH = 'health',
-  SHOPPING = 'shopping',
-  BILLS = 'bills',
-  SALARY = 'salary',
-  DIVIDEND = 'dividend',
-  STOCKS = 'stocks',
-  MUTUAL_FUND = 'mutual-fund',
-  PPF = 'ppf',
-  FD = 'fd',
-  INSURANCE = 'insurance',
-  OTHER = 'other',
-}
-
-export enum PaymentModes {
-  UPI = 'upi',
-  CREDIT_CARD = 'credit-card',
-  DEBIT_CARD = 'debit-card',
-  CASH = 'cash',
-  ONLINE_BANKING = 'online-banking',
-}
+import {
+  PaymentModes,
+  Category,
+  TransactionType,
+} from '@/transactions/utils/transaction.enum';
 
 @Entity('transactions')
 export class TransactionEntity {

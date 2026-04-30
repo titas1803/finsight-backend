@@ -11,7 +11,7 @@ export class AuthUtilService {
     private readonly config: ConfigService,
     private readonly jwtService: JwtService,
   ) {}
-  async hashPassword(password: string): Promise<string> {
+  private async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(
       password,
       this.config.get<string>('PASSWORD_SALT') ?? 10,
@@ -36,7 +36,7 @@ export class AuthUtilService {
 
     return this.jwtService.sign(payload, {
       secret,
-      expiresIn: '1h',
+      expiresIn: '15m',
     });
   }
 
@@ -58,8 +58,16 @@ export class AuthUtilService {
   generateJwtTokens(user: UserDetailType) {
     return {
       accessToken: this.generateAccessToken(user),
-      refreshToke: this.generateRefreshToken(user),
+      refreshToken: this.generateRefreshToken(user),
     };
+  }
+
+  async encryptRefreshToken(refreshToken: string) {
+    return await this.hashPassword(refreshToken);
+  }
+
+  async encryptPassword(password: string) {
+    return await this.hashPassword(password);
   }
 
   async verifyLogIn(enteredPassword: string, user: UserEntity) {
@@ -76,6 +84,17 @@ export class AuthUtilService {
     const { credential: _, ...filterUser } = user;
 
     const tokens = this.generateJwtTokens(filterUser);
+
     return { message: 'Login successful!', user: filterUser, ...tokens };
+  }
+
+  verifyRefreshToken(refreshToken: string) {
+    try {
+      return this.jwtService.verify<JwtPayloadType>(refreshToken, {
+        secret: this.config.get<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
   }
 }

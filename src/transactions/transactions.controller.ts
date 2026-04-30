@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -15,14 +17,19 @@ import { TransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
 import { Currentuser } from '@/auth/decorators/current-user.decorator';
 import { type UserDetailType } from '@/auth/types/auth-types';
 import { JwtAuthGuard } from '@/users/guards/jwt-auth.guard';
-import { Category, TransactionType } from '@/entities/transactions.entity';
+import {
+  TransactionType,
+  Category,
+  TransactionUrls,
+} from './utils/transaction.enum';
 
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
 export class TransactionsController {
   constructor(private readonly transactionService: TransactionsService) {}
 
-  @Post('new')
+  @Post(TransactionUrls.CREATE)
+  @HttpCode(HttpStatus.CREATED)
   async createNewTransaction(
     @Body() transactionDto: TransactionDto,
     @Currentuser() user: UserDetailType,
@@ -34,7 +41,7 @@ export class TransactionsController {
     );
   }
 
-  @Get('all')
+  @Get(TransactionUrls.GETALL)
   async findAllTransactions(
     @Currentuser() user: UserDetailType,
     @Query('type') type?: TransactionType,
@@ -61,7 +68,7 @@ export class TransactionsController {
     });
   }
 
-  @Get('summary')
+  @Get(TransactionUrls.GETSUMMARY)
   async getTransactionSummary(
     @Currentuser() user: UserDetailType,
     @Query('startDate') startDate?: string, // format: YYYY-MM-DD
@@ -74,7 +81,15 @@ export class TransactionsController {
     );
   }
 
-  @Get(':id')
+  @Get(TransactionUrls.GETLASTDAYS)
+  async getLastDays(
+    @Currentuser() user: UserDetailType,
+    @Query('period') period?: 'week' | 'month' | 'year',
+  ) {
+    return this.transactionService.getLastSpecificDays(user.id, period);
+  }
+
+  @Get(TransactionUrls.FINDBYID)
   async findTransactionById(
     @Param('id', ParseUUIDPipe) transactionId: string,
     @Currentuser() user: UserDetailType,
@@ -86,7 +101,20 @@ export class TransactionsController {
     );
   }
 
-  @Patch('update/:id')
+  @Get(TransactionUrls.FINDBYTYPEANDCATEGORY)
+  async getByTypeAndCategory(
+    @Param('type') type: TransactionType,
+    @Currentuser() user: UserDetailType,
+    @Query('category') category?: Category,
+  ) {
+    return await this.transactionService.getTransactionByTypeAndCategory(
+      user.id,
+      type,
+      category,
+    );
+  }
+
+  @Patch(TransactionUrls.UPDATE)
   async updateTransactionById(
     @Param('id', ParseUUIDPipe) transactionId: string,
     @Body() updateTransactionDto: UpdateTransactionDto,
@@ -100,7 +128,7 @@ export class TransactionsController {
     );
   }
 
-  @Delete('delete/:id')
+  @Delete(TransactionUrls.DELETE)
   async deleteTransactionById(
     @Param('id', ParseUUIDPipe) transactionId: string,
     @Currentuser() user: UserDetailType,

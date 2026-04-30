@@ -1,9 +1,4 @@
 import {
-  Category,
-  PaymentModes,
-  TransactionType,
-} from '@/entities/transactions.entity';
-import {
   IsCurrency,
   IsDateString,
   IsEnum,
@@ -11,6 +6,11 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
+import {
+  PaymentModes,
+  Category,
+  TransactionType,
+} from '../utils/transaction.enum';
 
 export class TransactionDto {
   @IsCurrency({
@@ -52,22 +52,27 @@ export class UpdateTransactionDto {
     require_symbol: false,
     digits_after_decimal: [2],
   })
+  @IsOptional()
   amount?: number;
 
   @IsEnum(PaymentModes, { message: 'Specify a correct payment mode' })
+  @IsOptional()
   paymentMode?: PaymentModes;
 
   @IsDateString()
+  @IsOptional()
   date?: string;
 
   @IsEnum(Category, { message: 'Specify a correct category' })
   @IsString({ message: 'category must be a string' })
+  @IsOptional()
   category?: Category;
 
   @IsEnum(TransactionType, {
     message: 'Specify if a transaction in income or expense',
   })
   @IsString({ message: 'category must be a string' })
+  @IsOptional()
   type?: TransactionType;
 
   @IsString({ message: 'description must be a string' })
