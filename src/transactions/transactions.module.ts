@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserEntity } from '@/entities/user.entity';
 
 @Module({
+  exports: [TransactionsService],
   imports: [TypeOrmModule.forFeature([TransactionEntity, UserEntity])],
   providers: [TransactionsService],
   controllers: [TransactionsController],

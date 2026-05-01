@@ -15,7 +15,7 @@ import {
 import { TransactionsService } from './transactions.service';
 import { TransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
 import { Currentuser } from '@/auth/decorators/current-user.decorator';
-import { type UserDetailType } from '@/auth/types/auth-types';
+import { type UserDetailType } from '@/types/auth-types';
 import { JwtAuthGuard } from '@/users/guards/jwt-auth.guard';
 import {
   TransactionType,

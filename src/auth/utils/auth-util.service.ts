@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
-import { JwtPayloadType, UserDetailType } from '../types/auth-types';
+import { JwtPayloadType, UserDetailType } from '../../types/auth-types';
 import { UserEntity } from '@/entities/user.entity';
 
 @Injectable()
@@ -11,10 +11,10 @@ export class AuthUtilService {
     private readonly config: ConfigService,
     private readonly jwtService: JwtService,
   ) {}
-  private async hashPassword(password: string): Promise<string> {
+  private async hashDatas(data: string): Promise<string> {
     return bcrypt.hash(
-      password,
-      this.config.get<string>('PASSWORD_SALT') ?? 10,
+      data,
+      parseInt(this.config.get<string>('PASSWORD_SALT') ?? '10', 10),
     );
   }
 
@@ -63,11 +63,11 @@ export class AuthUtilService {
   }
 
   async encryptRefreshToken(refreshToken: string) {
-    return await this.hashPassword(refreshToken);
+    return await this.hashDatas(refreshToken);
   }
 
   async encryptPassword(password: string) {
-    return await this.hashPassword(password);
+    return await this.hashDatas(password);
   }
 
   async verifyLogIn(enteredPassword: string, user: UserEntity) {

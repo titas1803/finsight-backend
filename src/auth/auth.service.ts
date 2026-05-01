@@ -24,6 +24,12 @@ export class AuthService {
 
     private readonly authUtils: AuthUtilService,
   ) {}
+
+  /**
+   * Create a new user account based on the provided registration details. It checks for existing email and phone number to prevent duplicates, hashes the password, and saves the new user along with their credentials in the database. If the email or phone number already exists, it throws a ConflictException. Upon successful registration, it returns a welcome message to the user.
+   * @param registerDto an object containing the user's registration details, including email, phone number, first name, last name, and password
+   * @returns an object containing a message welcoming the user to their new account
+   */
   async createUser(registerDto: RegisterDto) {
     const { email, firstName, lastName, password, phoneNumber } = registerDto;
     const existingEmailUser = await this.userRepo.findOne({
@@ -58,6 +64,11 @@ export class AuthService {
     };
   }
 
+  /**
+   * Log in a user based on the provided login details. It checks if the user exists using either email or phone number, verifies the password, and generates JWT access and refresh tokens. The refresh token is encrypted and stored in the database for future validation. If the login credentials are invalid, it throws an UnauthorizedException. Upon successful login, it returns the generated tokens along with a success message.
+   * @param loginDto an object containing the user's login details, which can include either email or phone number along with the password
+   * @returns an object containing a message indicating successful login and the generated access and refresh tokens
+   */
   async loginUser(loginDto: LoginDto) {
     const { email, phoneNumber, password } = loginDto;
 
@@ -74,7 +85,7 @@ export class AuthService {
         where: { phoneNumber },
         relations: ['credential'],
       });
-      if (!user) throw new UnauthorizedException("Email address doesn't exist");
+      if (!user) throw new UnauthorizedException("Phone number doesn't exist");
     } else {
       throw new BadRequestException('Provide either email or phone number');
     }
@@ -93,6 +104,13 @@ export class AuthService {
     return result;
   }
 
+  /**
+   * Update a user's password based on their ID and the old and new passwords provided. It first verifies the user's existence and checks if the old password matches the one stored in the database. If the old password is correct, it hashes the new password and updates the user's credential information in the database. If the old password is incorrect, it throws an UnauthorizedException.
+   * @param id the ID of the user whose password to update
+   * @param oldPassword the current password of the user
+   * @param newPassword the new password for the user
+   * @returns an object containing a message indicating successful password update
+   */
   async updatePassword(id: string, oldPassword: string, newPassword: string) {
     const userExists = await this.userRepo.findOne({
       where: { id },
@@ -116,6 +134,12 @@ export class AuthService {
     return { message: 'Password updated successfully' };
   }
 
+  /**
+   * Refresh JWT access and refresh tokens based on the provided refresh token. It verifies the incoming refresh token, checks if it matches the one stored in the database for the user, and if valid, generates new access and refresh tokens. The new refresh token is encrypted and updated in the database. If the incoming refresh token is invalid or does not match the stored token, it throws an UnauthorizedException or ForbiddenException respectively. Upon successful token refresh, it returns the new tokens along with a success message.
+   * Note: This method is crucial for maintaining user sessions without requiring them to log in again, while also ensuring security by validating the refresh token and preventing unauthorized access.
+   * @param incomingRefreshToken the refresh token provided by the user
+   * @returns an object containing the new access and refresh tokens along with a success message
+   */
   async refreshTokens(incomingRefreshToken: string) {
     const payload = this.authUtils.verifyRefreshToken(incomingRefreshToken);
 
@@ -168,6 +192,11 @@ export class AuthService {
     };
   }
 
+  /**
+   * Log out a user by invalidating their refresh token. It updates the user's credential information in the database to set the refresh token to null, effectively logging the user out and preventing any further use of the previous refresh token for generating new access tokens. Upon successful logout, it returns a message indicating that the user has been logged out successfully.
+   * @param userId the ID of the user to be logged out
+   * @returns confirmation message indicating successful logout
+   */
   async logOut(userId: string) {
     await this.credentialRepo.update(
       { user: { id: userId } },

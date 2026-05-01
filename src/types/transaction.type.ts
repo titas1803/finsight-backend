@@ -2,7 +2,7 @@ import {
   PaymentModes,
   TransactionType,
   Category,
-} from '../utils/transaction.enum';
+} from '../transactions/utils/transaction.enum';
 
 export type TransactionFiltersType = {
   startAmount?: string;

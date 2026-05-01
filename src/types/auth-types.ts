@@ -1,4 +1,4 @@
-import { UserEntity, UserRole } from '../../entities/user.entity';
+import { UserEntity, UserRole } from '../entities/user.entity';
 
 export type JwtPayloadType = {
   email: string;

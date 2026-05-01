@@ -13,7 +13,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from '@/users/guards/jwt-auth.guard';
 import { Currentuser } from './decorators/current-user.decorator';
 import { PasswordDto } from './dto/password.dto';
-import { type UserDetailType } from './types/auth-types';
+import { type UserDetailType } from '../types/auth-types';
 import { RefreshTokenDto } from './dto/refreshToken.dto';
 import { AuthUrls } from './utils/auth.enum';
 
@@ -30,6 +30,13 @@ export class AuthController {
   @Post(AuthUrls.LOGIN)
   async loginUser(@Body() loginDto: LoginDto) {
     return await this.authService.loginUser(loginDto);
+  }
+
+  @Post(AuthUrls.LOGOUT)
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async logOut(@Currentuser() userInfo: UserDetailType) {
+    return await this.authService.logOut(userInfo.id);
   }
 
   @Post(AuthUrls.REFRESHTOKEN)
