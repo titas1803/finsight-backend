@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { InsightsService } from './insights.service';
 import { JwtAuthGuard } from '@/users/guards/jwt-auth.guard';
 import { Currentuser } from '@/auth/decorators/current-user.decorator';
@@ -19,10 +19,10 @@ export class InsightsController {
     return this.insightsService.getInsights(user.id, period);
   }
 
-  @Get('category')
+  @Get('category/:category')
   async getCategoryInsights(
     @Currentuser() user: UserDetailType,
-    @Query('category') category: Category,
+    @Param('category') category: Category,
   ) {
     return this.insightsService.getCategoryInsights(user.id, category);
   }

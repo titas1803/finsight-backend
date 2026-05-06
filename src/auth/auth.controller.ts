@@ -5,7 +5,11 @@ import {
   HttpStatus,
   Patch,
   Post,
+  Req,
+  Res,
   UseGuards,
+  UnauthorizedException,
+  Get,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -14,8 +18,8 @@ import { JwtAuthGuard } from '@/users/guards/jwt-auth.guard';
 import { Currentuser } from './decorators/current-user.decorator';
 import { PasswordDto } from './dto/password.dto';
 import { type UserDetailType } from '../types/auth-types';
-import { RefreshTokenDto } from './dto/refreshToken.dto';
 import { AuthUrls } from './utils/auth.enum';
+import { type Response, type Request } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -28,8 +32,33 @@ export class AuthController {
   }
 
   @Post(AuthUrls.LOGIN)
-  async loginUser(@Body() loginDto: LoginDto) {
-    return await this.authService.loginUser(loginDto);
+  async loginUser(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { accessToken, message, refreshToken, user } =
+      await this.authService.loginUser(loginDto);
+
+    response.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 mins
+      path: '/',
+    });
+
+    response.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/auth/refresh',
+    });
+
+    return {
+      message,
+      user,
+    };
   }
 
   @Post(AuthUrls.LOGOUT)
@@ -40,8 +69,43 @@ export class AuthController {
   }
 
   @Post(AuthUrls.REFRESHTOKEN)
-  async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
-    return await this.authService.refreshTokens(refreshTokenDto.refreshToken);
+  async refreshToken(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    if (
+      (request.cookies as { refreshToken: string } | undefined)?.refreshToken
+    ) {
+      const refreshToken = (request.cookies as { refreshToken: string })
+        .refreshToken;
+
+      const tokens = await this.authService.refreshTokens(refreshToken);
+
+      response.cookie('accessToken', tokens.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 15 * 60 * 1000,
+      });
+
+      response.cookie('refreshToken', tokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: `/auth/${AuthUrls.REFRESHTOKEN}`,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      return tokens;
+    } else {
+      throw new UnauthorizedException();
+    }
+  }
+
+  @Get(AuthUrls.ME)
+  @UseGuards(JwtAuthGuard)
+  requestMe(@Currentuser() user: UserDetailType) {
+    return { user };
   }
 
   @Patch(AuthUrls.UPDATEPASSWORD)

@@ -83,84 +83,97 @@ export class TransactionsService {
    * @returns an object containing a message, the count of transactions found, and the list of transactions that match the filters
    */
   async findAllTransactions(userId: string, filters?: TransactionFiltersType) {
-    const dbAlias = 'transaction';
-    const query = this.transactionRepo
-      .createQueryBuilder(dbAlias)
-      .where(`${dbAlias}.user.id = :userId`, { userId });
+    try {
+      const dbAlias = 'transaction';
+      const query = this.transactionRepo
+        .createQueryBuilder(dbAlias)
+        .where(`${dbAlias}.user.id = :userId`, { userId });
 
-    // filter by category
-    if (filters?.category) {
-      query.andWhere(`${dbAlias}.category = :category`, {
-        category: filters.category,
-      });
+      // filter by category
+      if (filters?.category) {
+        query.andWhere(`${dbAlias}.category = :category`, {
+          category: filters.category,
+        });
+      }
+
+      // filter by type
+      if (filters?.type) {
+        query.andWhere(`${dbAlias}.type = :type`, { type: filters.type });
+      }
+
+      // filter by payment mode
+      if (filters?.paymentMode) {
+        query.andWhere(`${dbAlias}.paymentMode = :paymentMode`, {
+          paymentMode: filters.paymentMode,
+        });
+      }
+
+      // Filter amount range
+      if (filters?.startAmount && filters?.endAmount) {
+        query.andWhere(
+          `${dbAlias}.amount BETWEEN :startAmount AND :endAmount`,
+          {
+            startAmount: filters.startAmount,
+            endAmount: filters.endAmount,
+          },
+        );
+      } else if (filters?.startAmount) {
+        query.andWhere(`${dbAlias}.amount >= :startAmount`, {
+          startAmount: filters.startAmount,
+        });
+      } else if (filters?.endAmount) {
+        query.andWhere(`${dbAlias}.amount <= :endAmount`, {
+          endAmount: filters.endAmount,
+        });
+      }
+
+      // filter date range
+      if (filters?.startDate && filters?.endDate) {
+        query.andWhere(`${dbAlias}.date BETWEEN :startDate AND :endDate`, {
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        });
+      } else if (filters?.startDate) {
+        query.andWhere(`${dbAlias}.date >= :startDate`, {
+          startDate: filters.startDate,
+        });
+      } else if (filters?.endDate) {
+        query.andWhere(`${dbAlias}.date <= :endDate`, {
+          endDate: filters.endDate,
+        });
+      }
+
+      // filter by search keyword
+      if (filters?.search) {
+        query.andWhere(`LOWER(${dbAlias}.description) LIKE LOWER(:search)`, {
+          search: `%${filters.search}%`,
+        });
+      }
+
+      if (filters?.limit) {
+        query.take(filters.limit);
+      }
+
+      const sortBy = filters?.sortBy ?? 'date';
+      const sortOrder = filters?.order ?? 'DESC';
+      query.orderBy(`${dbAlias}.${sortBy}`, sortOrder);
+
+      const [transactions, count] = await query.getManyAndCount();
+
+      if (count === 0) {
+        throw new NotFoundException(
+          'No transaction found matching the criteria',
+        );
+      }
+
+      return {
+        message: `${count} transactions found`,
+        count,
+        transactions,
+      };
+    } catch (err) {
+      throw new BadRequestException((err as Error).message);
     }
-
-    // filter by type
-    if (filters?.type) {
-      query.andWhere(`${dbAlias}.type = :type`, { type: filters.type });
-    }
-
-    // filter by payment mode
-    if (filters?.paymentMode) {
-      query.andWhere(`${dbAlias}.paymentMode = :paymentMode`, {
-        paymentMode: filters.paymentMode,
-      });
-    }
-
-    // Filter amount range
-    if (filters?.startAmount && filters?.endAmount) {
-      query.andWhere(`${dbAlias}.amount BETWEEN :startAmount AND :endAmount`, {
-        startAmount: filters.startAmount,
-        endAmount: filters.endAmount,
-      });
-    } else if (filters?.startAmount) {
-      query.andWhere(`${dbAlias}.amount >= :startAmount`, {
-        startAmount: filters.startAmount,
-      });
-    } else if (filters?.endAmount) {
-      query.andWhere(`${dbAlias}.amount <= :endAmount`, {
-        endAmount: filters.endAmount,
-      });
-    }
-
-    // filter date range
-    if (filters?.startDate && filters?.endDate) {
-      query.andWhere(`${dbAlias}.date BETWEEN :startDate AND :endDate`, {
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-      });
-    } else if (filters?.startDate) {
-      query.andWhere(`${dbAlias}.date >= :startDate`, {
-        startDate: filters.startDate,
-      });
-    } else if (filters?.endDate) {
-      query.andWhere(`${dbAlias}.date <= :endDate`, {
-        endDate: filters.endDate,
-      });
-    }
-
-    // filter by search keyword
-    if (filters?.search) {
-      query.andWhere(`LOWER(${dbAlias}.description) LIKE LOWER(:search)`, {
-        search: `%${filters.search}%`,
-      });
-    }
-
-    const sortBy = filters?.sortBy ?? 'date';
-    const sortOrder = filters?.order ?? 'DESC';
-    query.orderBy(`${dbAlias}.${sortBy}`, sortOrder);
-
-    const [transactions, count] = await query.getManyAndCount();
-
-    if (count === 0) {
-      throw new NotFoundException('No transaction found matching the criteria');
-    }
-
-    return {
-      message: `${count} transactions found`,
-      count,
-      transactions,
-    };
   }
 
   /**
@@ -303,7 +316,7 @@ export class TransactionsService {
    * @param userId the user ID
    * @param type the transaction type
    * @param category the category (optional)
-   * @returns
+   * @returns Array of category: string, total: number, percentage: string, count: number
    */
   async getTransactionByTypeAndCategory(
     userId: string,
@@ -364,7 +377,7 @@ export class TransactionsService {
    * @param numberOfDays the period to query: 'week', 'month', or 'year'
    * @returns an object containing message, count, and transactions
    */
-  async getLastSpecificDays(
+  async getLastSpecificPeriod(
     userId: string,
     numberOfDays: 'week' | 'month' | 'year' = 'week',
   ) {

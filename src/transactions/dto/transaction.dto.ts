@@ -13,11 +13,14 @@ import {
 } from '../utils/transaction.enum';
 
 export class TransactionDto {
-  @IsCurrency({
-    symbol: '₹',
-    require_symbol: false,
-    digits_after_decimal: [2],
-  })
+  @IsCurrency(
+    {
+      symbol: '₹',
+      require_symbol: false,
+      digits_after_decimal: [2],
+    },
+    { message: 'Please enter a correct amount' },
+  )
   @IsNotEmpty({ message: 'amount is requried' })
   amount!: number;
 

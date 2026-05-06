@@ -93,10 +93,10 @@ Analyze the following transactions from the ${periodLabel} and provide:
 3. One specific actionable tip to improve finances
 
 Key stats:
-- Total Income:      $${stats.totalIncome}
-- Total Expense:     $${stats.totalExpense}
-- Total Investment:  $${stats.totalInvestment}
-- Net Balance:       $${stats.netBalance}
+- Total Income:      ₹${stats.totalIncome}
+- Total Expense:     ₹${stats.totalExpense}
+- Total Investment:  ₹${stats.totalInvestment}
+- Net Balance:       ₹${stats.netBalance}
 - Top Expense Category: ${stats.topExpenseCategory}
 - Total Transactions: ${stats.transactionCount}
 
@@ -144,7 +144,7 @@ Keep response under 120 words. Be specific, not generic.
     }[period];
 
     const { transactions, count } =
-      await this.transactionsService.getLastSpecificDays(userId, period);
+      await this.transactionsService.getLastSpecificPeriod(userId, period);
 
     if (count === 0) {
       return {

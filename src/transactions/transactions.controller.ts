@@ -53,6 +53,7 @@ export class TransactionsController {
     @Query('search') search?: string,
     @Query('sortBy') sortBy?: 'date' | 'amount',
     @Query('order') order?: 'ASC' | 'DESC',
+    @Query('limit') limit?: string,
   ) {
     const { id: userId } = user;
     return await this.transactionService.findAllTransactions(userId, {
@@ -65,6 +66,7 @@ export class TransactionsController {
       search,
       sortBy,
       order,
+      limit: limit ? parseInt(limit, 10) : undefined,
     });
   }
 
@@ -82,11 +84,11 @@ export class TransactionsController {
   }
 
   @Get(TransactionUrls.GETLASTDAYS)
-  async getLastDays(
+  async getLastPeriod(
     @Currentuser() user: UserDetailType,
     @Query('period') period?: 'week' | 'month' | 'year',
   ) {
-    return this.transactionService.getLastSpecificDays(user.id, period);
+    return this.transactionService.getLastSpecificPeriod(user.id, period);
   }
 
   @Get(TransactionUrls.FINDBYID)

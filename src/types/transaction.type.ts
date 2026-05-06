@@ -15,4 +15,5 @@ export type TransactionFiltersType = {
   search?: string;
   sortBy?: 'date' | 'amount';
   order?: 'ASC' | 'DESC';
+  limit?: number;
 };
