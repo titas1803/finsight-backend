@@ -20,6 +20,8 @@ import { PasswordDto } from './dto/password.dto';
 import { type UserDetailType } from '../types/auth-types';
 import { AuthUrls } from './utils/auth.enum';
 import { type Response, type Request } from 'express';
+import { ReqIpThrottleGuard } from '@/guard/request-throttle.guard';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -27,6 +29,8 @@ export class AuthController {
 
   @Post(AuthUrls.REGISTER)
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(ReqIpThrottleGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5, blockDuration: 1000 * 60 * 5 } })
   async createUser(@Body() registerDto: RegisterDto) {
     return await this.authService.createUser(registerDto);
   }
@@ -52,7 +56,7 @@ export class AuthController {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/auth/refresh',
+      path: AuthUrls.REFRESHTOKEN,
     });
 
     return {
@@ -84,16 +88,17 @@ export class AuthController {
       response.cookie('accessToken', tokens.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 15 * 60 * 1000,
+        sameSite: 'lax',
+        maxAge: 15 * 60 * 1000, // 15 mins
+        path: '/',
       });
 
       response.cookie('refreshToken', tokens.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: `/auth/${AuthUrls.REFRESHTOKEN}`,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: AuthUrls.REFRESHTOKEN,
       });
 
       return tokens;

@@ -12,6 +12,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AuthUtilService } from './utils/auth-util.service';
 import { LoginDto } from './dto/login.dto';
 import { CredentialsEntity } from '@/entities/credentials.entity';
+import Redis from 'ioredis';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import { refreshRedisKey } from '@/utils/redis.util';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +24,8 @@ export class AuthService {
 
     @InjectRepository(CredentialsEntity)
     private readonly credentialRepo: Repository<CredentialsEntity>,
+
+    @InjectRedis() private readonly redis: Redis,
 
     private readonly authUtils: AuthUtilService,
   ) {}
@@ -74,12 +79,18 @@ export class AuthService {
 
     let user: UserEntity | null = null;
 
+    const identifier = email ?? phoneNumber ?? 'unknown';
+
+    await this.authUtils.checkLoginRateLimit(identifier);
+
     if (email) {
       user = await this.userRepo.findOne({
         where: { email },
         relations: ['credential'],
       });
-      if (!user) throw new UnauthorizedException("Email address doesn't exist");
+      if (!user) {
+        throw new UnauthorizedException("Email address doesn't exist");
+      }
     } else if (phoneNumber) {
       user = await this.userRepo.findOne({
         where: { phoneNumber },
@@ -96,10 +107,15 @@ export class AuthService {
       result.refreshToken,
     );
 
-    await this.credentialRepo.update(
-      { user: { id: user.id } },
-      { refreshToken: encryptedRefreshToken },
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    await this.redis.set(
+      refreshRedisKey(user.id),
+      encryptedRefreshToken,
+      'EX',
+      3600 * 24 * 7,
     );
+
+    await this.authUtils.clearLoginAttempts(identifier);
 
     return result;
   }
@@ -143,31 +159,23 @@ export class AuthService {
   async refreshTokens(incomingRefreshToken: string) {
     const payload = this.authUtils.verifyRefreshToken(incomingRefreshToken);
 
-    const user = await this.userRepo.findOne({
-      where: { id: payload.userId },
-      relations: ['credential'],
-      select: {
-        id: true,
-        role: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phoneNumber: true,
-        createdAt: true,
-        updatedAt: true,
-        credential: {
-          refreshToken: true,
-        },
-      },
-    });
+    const user = await this.userRepo.findOneBy({ id: payload.userId });
 
-    if (!user || !user.credential.refreshToken) {
+    if (!user) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const cacheKey = refreshRedisKey(user.id);
+
+    const storedRefreshToken = await this.redis.get(cacheKey);
+
+    if (!storedRefreshToken) {
       throw new ForbiddenException('Access denied');
     }
 
     const isValidToken = await this.authUtils.comparePassword(
       incomingRefreshToken,
-      user.credential.refreshToken,
+      storedRefreshToken,
     );
 
     if (!isValidToken) throw new UnauthorizedException('Invalid refresh token');
@@ -181,9 +189,12 @@ export class AuthService {
       token.refreshToken,
     );
 
-    await this.credentialRepo.update(
-      { user: { id: user.id } },
-      { refreshToken: encryptedRefreshToken },
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    await this.redis.set(
+      refreshRedisKey(user.id),
+      encryptedRefreshToken,
+      'EX',
+      3600 * 24 * 7,
     );
 
     return {
@@ -198,10 +209,8 @@ export class AuthService {
    * @returns confirmation message indicating successful logout
    */
   async logOut(userId: string) {
-    await this.credentialRepo.update(
-      { user: { id: userId } },
-      { refreshToken: null },
-    );
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    await this.redis.del(`refresh_token:${userId}`);
 
     return { message: 'Logged out successfully' };
   }

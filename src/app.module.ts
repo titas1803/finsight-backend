@@ -7,6 +7,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import appConfig from './configs/app.config';
 import dbFactory from './configs/db.config';
+import { RedisModule } from '@nestjs-modules/ioredis';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -22,6 +24,11 @@ import dbFactory from './configs/db.config';
       inject: [ConfigService],
       useFactory: dbFactory,
     }),
+    RedisModule.forRoot({
+      type: 'single',
+      url: process.env.REDIS_URL,
+    }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 5 }]),
   ],
   controllers: [],
   providers: [],
