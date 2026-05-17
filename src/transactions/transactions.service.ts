@@ -6,19 +6,77 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
-import { UserEntity } from '@/entities/user.entity';
 import { Repository } from 'typeorm';
 import { TransactionFiltersType } from '../types/transaction.type';
 import { TransactionType, Category } from './utils/transaction.enum';
+import {
+  findAllTransactionsRedisKey,
+  findTransactionByIdRedisKey,
+  findTransactionByTypeAndCategoryRedisKey,
+  findTransactionsSummaryRedisKey,
+  findTrasactionBySpecificPeriodRedisKey,
+  transactionRedisKeyInital,
+} from '@/utils/redis.util';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class TransactionsService {
   constructor(
     @InjectRepository(TransactionEntity)
     private readonly transactionRepo: Repository<TransactionEntity>,
-    @InjectRepository(UserEntity)
-    private readonly userRepo: Repository<UserEntity>,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
+
+  private async setTransactionRedisData(
+    key: string,
+    data: string,
+    seconds: number | string = 3600 * 10,
+  ) {
+    await this.redis.set(key, data, 'EX', seconds);
+  }
+
+  private async deleteTransactionRedisForuser(
+    userId: string,
+    allOrOthers: 'ALL' | 'OTHERS' = 'ALL',
+    transactionId?: string,
+  ) {
+    if (allOrOthers === 'ALL') {
+      const keys = await this.redis.keys(
+        `${transactionRedisKeyInital(userId)}:*`,
+      );
+      if (keys.length) await this.redis.del(...keys);
+    }
+
+    const findAllRedisKey = await this.redis.keys(
+      `${findAllTransactionsRedisKey(userId)}:*`,
+    );
+    const findSumaryRedisKey = await this.redis.keys(
+      `${findTransactionsSummaryRedisKey(userId)}:*`,
+    );
+    const findTypeAndCategoryRedisKey = await this.redis.keys(
+      `${transactionRedisKeyInital(userId)}:type:*`,
+    );
+    const findSpecificPeriodRedisKey = await this.redis.keys(
+      `${transactionRedisKeyInital(userId)}:period:*`,
+    );
+
+    if (transactionId) {
+      const findByIdRedisKey = findTransactionByIdRedisKey(
+        transactionId,
+        userId,
+      );
+      await this.redis.del(findByIdRedisKey);
+    }
+
+    await this.redis.del(
+      ...findAllRedisKey,
+      ...findSumaryRedisKey,
+      ...findTypeAndCategoryRedisKey,
+      ...findSpecificPeriodRedisKey,
+    );
+  }
+
   /**
    * Find a transaction by its ID and the user ID to ensure the transaction belongs to the user.
    * @param transactionId the ID of the transaction to be retrieved
@@ -27,11 +85,22 @@ export class TransactionsService {
    * Note: This is a private method used internally by other service methods to validate the existence of a transaction and its association with the user before performing operations like update or delete.
    */
   private async findById(transactionId: string, userId: string) {
+    const findByIdRedisKey = findTransactionByIdRedisKey(transactionId, userId);
+
+    const cached = await this.redis.get(findByIdRedisKey);
+
+    if (cached) return JSON.parse(cached) as TransactionEntity;
+
     const transaction = await this.transactionRepo.findOne({
       where: { id: transactionId, user: { id: userId } },
     });
 
     if (!transaction) throw new NotFoundException('No transaction found');
+
+    await this.setTransactionRedisData(
+      findByIdRedisKey,
+      JSON.stringify(transaction),
+    );
 
     return transaction;
   }
@@ -51,6 +120,8 @@ export class TransactionsService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { user: _, ...savedTransaction } =
       await this.transactionRepo.save(newTransaction);
+
+    await this.deleteTransactionRedisForuser(userId, 'OTHERS');
 
     return {
       message: `New transaction of ${savedTransaction.amount} is added`,
@@ -83,97 +154,106 @@ export class TransactionsService {
    * @returns an object containing a message, the count of transactions found, and the list of transactions that match the filters
    */
   async findAllTransactions(userId: string, filters?: TransactionFiltersType) {
-    try {
-      const dbAlias = 'transaction';
-      const query = this.transactionRepo
-        .createQueryBuilder(dbAlias)
-        .where(`${dbAlias}.user.id = :userId`, { userId });
+    const findAllRedisKey = findAllTransactionsRedisKey(userId, filters);
 
-      // filter by category
-      if (filters?.category) {
-        query.andWhere(`${dbAlias}.category = :category`, {
-          category: filters.category,
-        });
-      }
+    const cached = await this.redis.get(findAllRedisKey);
 
-      // filter by type
-      if (filters?.type) {
-        query.andWhere(`${dbAlias}.type = :type`, { type: filters.type });
-      }
-
-      // filter by payment mode
-      if (filters?.paymentMode) {
-        query.andWhere(`${dbAlias}.paymentMode = :paymentMode`, {
-          paymentMode: filters.paymentMode,
-        });
-      }
-
-      // Filter amount range
-      if (filters?.startAmount && filters?.endAmount) {
-        query.andWhere(
-          `${dbAlias}.amount BETWEEN :startAmount AND :endAmount`,
-          {
-            startAmount: filters.startAmount,
-            endAmount: filters.endAmount,
-          },
-        );
-      } else if (filters?.startAmount) {
-        query.andWhere(`${dbAlias}.amount >= :startAmount`, {
-          startAmount: filters.startAmount,
-        });
-      } else if (filters?.endAmount) {
-        query.andWhere(`${dbAlias}.amount <= :endAmount`, {
-          endAmount: filters.endAmount,
-        });
-      }
-
-      // filter date range
-      if (filters?.startDate && filters?.endDate) {
-        query.andWhere(`${dbAlias}.date BETWEEN :startDate AND :endDate`, {
-          startDate: filters.startDate,
-          endDate: filters.endDate,
-        });
-      } else if (filters?.startDate) {
-        query.andWhere(`${dbAlias}.date >= :startDate`, {
-          startDate: filters.startDate,
-        });
-      } else if (filters?.endDate) {
-        query.andWhere(`${dbAlias}.date <= :endDate`, {
-          endDate: filters.endDate,
-        });
-      }
-
-      // filter by search keyword
-      if (filters?.search) {
-        query.andWhere(`LOWER(${dbAlias}.description) LIKE LOWER(:search)`, {
-          search: `%${filters.search}%`,
-        });
-      }
-
-      if (filters?.limit) {
-        query.take(filters.limit);
-      }
-
-      const sortBy = filters?.sortBy ?? 'date';
-      const sortOrder = filters?.order ?? 'DESC';
-      query.orderBy(`${dbAlias}.${sortBy}`, sortOrder);
-
-      const [transactions, count] = await query.getManyAndCount();
-
-      if (count === 0) {
-        throw new NotFoundException(
-          'No transaction found matching the criteria',
-        );
-      }
-
-      return {
-        message: `${count} transactions found`,
-        count,
-        transactions,
+    if (cached)
+      return JSON.parse(cached) as {
+        message: string;
+        transactions: TransactionEntity[];
+        count: number;
       };
-    } catch (err) {
-      throw new BadRequestException((err as Error).message);
+
+    const dbAlias = 'transaction';
+    const query = this.transactionRepo
+      .createQueryBuilder(dbAlias)
+      .where(`${dbAlias}.user.id = :userId`, { userId });
+
+    // filter by category
+    if (filters?.category) {
+      query.andWhere(`${dbAlias}.category = :category`, {
+        category: filters.category,
+      });
     }
+
+    // filter by type
+    if (filters?.type) {
+      query.andWhere(`${dbAlias}.type = :type`, { type: filters.type });
+    }
+
+    // filter by payment mode
+    if (filters?.paymentMode) {
+      query.andWhere(`${dbAlias}.paymentMode = :paymentMode`, {
+        paymentMode: filters.paymentMode,
+      });
+    }
+
+    // Filter amount range
+    if (filters?.startAmount && filters?.endAmount) {
+      query.andWhere(`${dbAlias}.amount BETWEEN :startAmount AND :endAmount`, {
+        startAmount: filters.startAmount,
+        endAmount: filters.endAmount,
+      });
+    } else if (filters?.startAmount) {
+      query.andWhere(`${dbAlias}.amount >= :startAmount`, {
+        startAmount: filters.startAmount,
+      });
+    } else if (filters?.endAmount) {
+      query.andWhere(`${dbAlias}.amount <= :endAmount`, {
+        endAmount: filters.endAmount,
+      });
+    }
+
+    // filter date range
+    if (filters?.startDate && filters?.endDate) {
+      query.andWhere(`${dbAlias}.date BETWEEN :startDate AND :endDate`, {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+      });
+    } else if (filters?.startDate) {
+      query.andWhere(`${dbAlias}.date >= :startDate`, {
+        startDate: filters.startDate,
+      });
+    } else if (filters?.endDate) {
+      query.andWhere(`${dbAlias}.date <= :endDate`, {
+        endDate: filters.endDate,
+      });
+    }
+
+    // filter by search keyword
+    if (filters?.search) {
+      query.andWhere(`LOWER(${dbAlias}.description) LIKE LOWER(:search)`, {
+        search: `%${filters.search}%`,
+      });
+    }
+
+    if (filters?.limit) {
+      query.take(filters.limit);
+    }
+
+    const sortBy = filters?.sortBy ?? 'date';
+    const sortOrder = filters?.order ?? 'DESC';
+    query.orderBy(`${dbAlias}.${sortBy}`, sortOrder);
+
+    const [transactions, count] = await query.getManyAndCount();
+
+    if (count === 0) {
+      throw new NotFoundException('No transaction found matching the criteria');
+    }
+    const response = {
+      message: `${count} transactions found`,
+      count,
+      transactions,
+    };
+
+    await this.setTransactionRedisData(
+      findAllRedisKey,
+      JSON.stringify(response),
+      3600 * 5,
+    );
+
+    return response;
   }
 
   /**
@@ -205,6 +285,8 @@ export class TransactionsService {
       },
     );
 
+    await this.deleteTransactionRedisForuser(userId, 'OTHERS', transactionId);
+
     return {
       message: `${updateResult.affected} transaction data updated`,
       count: updateResult.affected,
@@ -217,15 +299,17 @@ export class TransactionsService {
    * @param userId the ID of the user to ensure the transaction belongs to the user
    * @returns an object containing a message about the deletion and the count of deleted records
    */
-  async deleteTransaction(transactionid: string, userId: string) {
+  async deleteTransaction(transactionId: string, userId: string) {
     const deletedTransaction = await this.transactionRepo.delete([
-      { id: transactionid, user: { id: userId } },
+      { id: transactionId, user: { id: userId } },
     ]);
 
     if (!deletedTransaction.affected)
       throw new NotFoundException(
         "Either transaction not found or you don't have enough permission",
       );
+
+    await this.deleteTransactionRedisForuser(userId, 'OTHERS', transactionId);
 
     return {
       message: `${deletedTransaction.affected} transaction records deleted`,
@@ -246,6 +330,22 @@ export class TransactionsService {
     startDate?: string,
     endDate?: string,
   ) {
+    const findSummaryRedisKey = findTransactionsSummaryRedisKey(
+      userId,
+      startDate,
+      endDate,
+    );
+
+    const cached = await this.redis.get(findSummaryRedisKey);
+
+    if (cached)
+      return JSON.parse(cached) as {
+        totalIncome: number;
+        totalExpense: number;
+        totalInvestment: number;
+        transactionCount: number;
+      };
+
     const dbAlias = 'transaction';
     const query = this.transactionRepo
       .createQueryBuilder(dbAlias)
@@ -301,6 +401,17 @@ export class TransactionsService {
     const netbalance = totalIncome - totalInvestment - totalExpense;
     const transactionCount = parseInt(result.transactionCount) || 0;
 
+    await this.setTransactionRedisData(
+      findSummaryRedisKey,
+      JSON.stringify({
+        totalIncome,
+        totalInvestment,
+        totalExpense,
+        netbalance,
+        transactionCount,
+      }),
+    );
+
     return {
       totalIncome,
       totalInvestment,
@@ -322,7 +433,27 @@ export class TransactionsService {
     userId: string,
     type: TransactionType,
     category?: Category,
-  ) {
+  ): Promise<
+    {
+      category: string;
+      total: number;
+      percentage: string;
+      count: number;
+    }[]
+  > {
+    const findByTypeAndCategoryRedisKey =
+      findTransactionByTypeAndCategoryRedisKey(userId, type, category);
+
+    const cached = await this.redis.get(findByTypeAndCategoryRedisKey);
+
+    if (cached)
+      return JSON.parse(cached) as {
+        category: string;
+        total: number;
+        percentage: string;
+        count: number;
+      }[];
+
     const dbAlias = 'transaction';
     const query = this.transactionRepo
       .createQueryBuilder(dbAlias)
@@ -359,7 +490,7 @@ export class TransactionsService {
     if (!total || parseFloat(total.total) === 0)
       throw new NotFoundException(`No transaction found for type: ${type}`);
 
-    return rows.map((row) => ({
+    const response = rows.map((row) => ({
       category: row.category,
       total: parseFloat(row.total),
       percentage: (
@@ -368,6 +499,13 @@ export class TransactionsService {
       ).toFixed(2),
       count: parseInt(row.count),
     }));
+
+    await this.setTransactionRedisData(
+      findByTypeAndCategoryRedisKey,
+      JSON.stringify(response),
+    );
+
+    return response;
   }
 
   /**
@@ -380,7 +518,11 @@ export class TransactionsService {
   async getLastSpecificPeriod(
     userId: string,
     numberOfDays: 'week' | 'month' | 'year' = 'week',
-  ) {
+  ): Promise<{
+    message: string;
+    count: number;
+    transactions: TransactionEntity[];
+  }> {
     const today = new Date();
 
     const daysAgo = new Date();
@@ -406,6 +548,19 @@ export class TransactionsService {
         );
     }
 
+    const findBySpecificPeriodRedisKey = findTrasactionBySpecificPeriodRedisKey(
+      userId,
+      toDateString(daysAgo),
+      toDateString(today),
+    );
+    const cached = await this.redis.get(findBySpecificPeriodRedisKey);
+    if (cached)
+      return JSON.parse(cached) as {
+        message: string;
+        count: number;
+        transactions: TransactionEntity[];
+      };
+
     const dbAlias = 'transaction';
     const [transactions, count] = await this.transactionRepo
       .createQueryBuilder(dbAlias)
@@ -417,7 +572,7 @@ export class TransactionsService {
       .orderBy(`${dbAlias}.date`, 'DESC')
       .getManyAndCount();
 
-    return {
+    const response = {
       message:
         count === 0
           ? `No data found for last 1 ${numberOfDays}`
@@ -425,5 +580,12 @@ export class TransactionsService {
       count,
       transactions,
     };
+
+    await this.setTransactionRedisData(
+      findBySpecificPeriodRedisKey,
+      JSON.stringify(response),
+    );
+
+    return response;
   }
 }

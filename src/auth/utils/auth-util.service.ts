@@ -135,8 +135,6 @@ export class AuthUtilService {
       await this.redisClient.set(lockOutKey, '1', 'EX', this.LOCKOUT_SECONDS);
       await this.redisClient.del(attemptsKey);
 
-      console.log(this.LOCKOUT_SECONDS);
-
       throw new HttpException(
         `Too many login attempts. You are locked out for ${Number(this.LOCKOUT_SECONDS) / 60} minutes.`,
         HttpStatus.TOO_MANY_REQUESTS,

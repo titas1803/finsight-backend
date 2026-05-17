@@ -11,19 +11,15 @@ import { UserEntity } from '../entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthUtilService } from './utils/auth-util.service';
 import { LoginDto } from './dto/login.dto';
-import { CredentialsEntity } from '@/entities/credentials.entity';
 import Redis from 'ioredis';
 import { InjectRedis } from '@nestjs-modules/ioredis';
-import { refreshRedisKey } from '@/utils/redis.util';
+import { redisKeyForRefresh } from '@/utils/redis.util';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
-
-    @InjectRepository(CredentialsEntity)
-    private readonly credentialRepo: Repository<CredentialsEntity>,
 
     @InjectRedis() private readonly redis: Redis,
 
@@ -107,9 +103,8 @@ export class AuthService {
       result.refreshToken,
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await this.redis.set(
-      refreshRedisKey(user.id),
+      redisKeyForRefresh(user.id),
       encryptedRefreshToken,
       'EX',
       3600 * 24 * 7,
@@ -165,7 +160,7 @@ export class AuthService {
       throw new ForbiddenException('Access denied');
     }
 
-    const cacheKey = refreshRedisKey(user.id);
+    const cacheKey = redisKeyForRefresh(user.id);
 
     const storedRefreshToken = await this.redis.get(cacheKey);
 
@@ -189,9 +184,8 @@ export class AuthService {
       token.refreshToken,
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await this.redis.set(
-      refreshRedisKey(user.id),
+      redisKeyForRefresh(user.id),
       encryptedRefreshToken,
       'EX',
       3600 * 24 * 7,
@@ -209,7 +203,6 @@ export class AuthService {
    * @returns confirmation message indicating successful logout
    */
   async logOut(userId: string) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await this.redis.del(`refresh_token:${userId}`);
 
     return { message: 'Logged out successfully' };

@@ -142,10 +142,10 @@ Keep response under 120 words. Be specific, not generic.
    */
   async getInsights(userId: string, period: 'week' | 'month' | 'year') {
     const { finalKey } = getInsightRedisKey(userId, period);
-    //  eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+
     const cached = await this.redis.get(finalKey);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-    if (cached) return JSON.parse(cached as string);
+    if (cached) return JSON.parse(cached);
     const periodLabel = {
       week: 'Last 7 days',
       month: 'last 30 days',
@@ -174,7 +174,6 @@ Keep response under 120 words. Be specific, not generic.
       stats: this.calculateStats(transactions),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await this.redis.set(finalKey, JSON.stringify(finalData), 'EX', 3600);
     return finalData;
   }
@@ -190,10 +189,10 @@ Keep response under 120 words. Be specific, not generic.
   async getCategoryInsights(userId: string, category: Category) {
     // ✅ uses your actual findAllTransactions with filters
     const { finalKey } = getInsightRedisKey(userId, category);
-    //  eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+
     const cached = await this.redis.get(finalKey);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-    if (cached) return JSON.parse(cached as string);
+    if (cached) return JSON.parse(cached);
 
     const { transactions, count } =
       await this.transactionsService.findAllTransactions(userId, {
@@ -233,7 +232,6 @@ ${this.formatTransactions(transactions)}
       stats: this.calculateStats(transactions),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await this.redis.set(finalKey, JSON.stringify(finalData), 'EX', 3600);
 
     return finalData;
