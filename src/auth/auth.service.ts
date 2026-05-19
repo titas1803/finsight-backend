@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -14,6 +13,7 @@ import { LoginDto } from './dto/login.dto';
 import Redis from 'ioredis';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { redisKeyForRefresh } from '@/utils/redis.util';
+import { UserDetailType } from '@/types/auth-types';
 
 @Injectable()
 export class AuthService {
@@ -157,7 +157,7 @@ export class AuthService {
     const user = await this.userRepo.findOneBy({ id: payload.userId });
 
     if (!user) {
-      throw new ForbiddenException('Access denied');
+      throw new UnauthorizedException('Access denied');
     }
 
     const cacheKey = redisKeyForRefresh(user.id);
@@ -165,7 +165,7 @@ export class AuthService {
     const storedRefreshToken = await this.redis.get(cacheKey);
 
     if (!storedRefreshToken) {
-      throw new ForbiddenException('Access denied');
+      throw new UnauthorizedException('Access denied');
     }
 
     const isValidToken = await this.authUtils.comparePassword(
@@ -203,8 +203,27 @@ export class AuthService {
    * @returns confirmation message indicating successful logout
    */
   async logOut(userId: string) {
-    await this.redis.del(`refresh_token:${userId}`);
+    await this.redis.del(redisKeyForRefresh(userId));
 
     return { message: 'Logged out successfully' };
+  }
+
+  async getCurrentUser(refreshToken: string, user: UserDetailType) {
+    const isVerifiedToken = await this.redis.get(redisKeyForRefresh(user.id));
+
+    if (!isVerifiedToken) {
+      throw new UnauthorizedException('You are not authorized');
+    }
+
+    const isSame = await this.authUtils.comparePassword(
+      refreshToken,
+      isVerifiedToken,
+    );
+
+    if (!isSame) {
+      throw new UnauthorizedException('You are not authorized');
+    }
+
+    return user;
   }
 }

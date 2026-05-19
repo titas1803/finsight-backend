@@ -56,7 +56,7 @@ export class AuthController {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: AuthUrls.REFRESHTOKEN,
+      path: '/',
     });
 
     return {
@@ -68,7 +68,15 @@ export class AuthController {
   @Post(AuthUrls.LOGOUT)
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logOut(@Currentuser() userInfo: UserDetailType) {
+  async logOut(
+    @Res({ passthrough: true }) response: Response,
+    @Currentuser() userInfo: UserDetailType,
+  ) {
+    response.clearCookie('accessToken', { path: '/' });
+    response.clearCookie('refreshToken', {
+      path: '/',
+    });
+
     return await this.authService.logOut(userInfo.id);
   }
 
@@ -98,7 +106,7 @@ export class AuthController {
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        path: AuthUrls.REFRESHTOKEN,
+        path: '/',
       });
 
       return tokens;
@@ -109,8 +117,27 @@ export class AuthController {
 
   @Get(AuthUrls.ME)
   @UseGuards(JwtAuthGuard)
-  requestMe(@Currentuser() user: UserDetailType) {
-    return { user };
+  async requestMe(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+    @Currentuser() reqUser: UserDetailType,
+  ) {
+    const refreshToken = (
+      request.cookies as { refreshToken: string } | undefined
+    )?.refreshToken;
+    if (refreshToken) {
+      const user = await this.authService
+        .getCurrentUser(refreshToken, reqUser)
+        .catch(() => {
+          response.clearCookie('accessToken', { path: '/' });
+          response.clearCookie('refreshToken', {
+            path: '/',
+          });
+        });
+      return { user };
+    } else {
+      throw new UnauthorizedException('You are not authorized');
+    }
   }
 
   @Patch(AuthUrls.UPDATEPASSWORD)
