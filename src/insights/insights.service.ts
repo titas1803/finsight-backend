@@ -140,7 +140,22 @@ Keep response under 120 words. Be specific, not generic.
    * @param period the period to analyze transactions for, which can be 'week', 'month', or 'year'
    * @returns an object containing the period, generated insight, count of transactions analyzed, and key statistics about the user's finances during that period
    */
-  async getInsights(userId: string, period: 'week' | 'month' | 'year') {
+  async getInsights(
+    userId: string,
+    period: 'week' | 'month' | 'year',
+  ): Promise<{
+    period: 'year' | 'week' | 'month';
+    insight: string;
+    transactionCount: number;
+    stats: {
+      totalIncome: string;
+      totalExpense: string;
+      totalInvestment: string;
+      netBalance: string;
+      topExpenseCategory: string;
+      transactionCount: number;
+    } | null;
+  }> {
     const { finalKey } = getInsightRedisKey(userId, period);
 
     const cached = await this.redis.get(finalKey);
@@ -186,7 +201,22 @@ Keep response under 120 words. Be specific, not generic.
    * @param category the category of transactions to analyze
    * @returns an object containing the category, generated insight, count of transactions analyzed, and key statistics about the user's finances in that category
    */
-  async getCategoryInsights(userId: string, category: Category) {
+  async getCategoryInsights(
+    userId: string,
+    category: Category,
+  ): Promise<{
+    category: Category;
+    insight: string;
+    transactionCount: number;
+    stats: {
+      totalIncome: string;
+      totalExpense: string;
+      totalInvestment: string;
+      netBalance: string;
+      topExpenseCategory: string;
+      transactionCount: number;
+    } | null;
+  }> {
     // ✅ uses your actual findAllTransactions with filters
     const { finalKey } = getInsightRedisKey(userId, category);
 

@@ -18,7 +18,7 @@ export enum TransactionType {
 export enum IncomeCategory {
   SALARY = 'salary',
   DIVIDEND = 'dividend',
-  INVESTMENT = 'investment',
+  PASSIVE = 'passive',
 }
 
 export enum InvestmentCategory {
