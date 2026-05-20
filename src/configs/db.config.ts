@@ -5,19 +5,11 @@ import { ConfigService } from '@nestjs/config';
 
 export default function dbFactory(config: ConfigService) {
   return {
-    type: (config.get<string>('DATABASE_TYPE') ?? 'postgres') as
-      | 'postgres'
-      | 'mysql'
-      | 'sqlite'
-      | 'mariadb'
-      | 'mongodb'
-      | 'oracle'
-      | 'mssql',
-    host: config.get<string>('DATABASE_HOST'),
-    port: parseInt(config.get<string>('DATABASE_PORT') ?? '0', 10),
-    username: config.get<string>('DATABASE_USERNAME'),
-    password: config.get<string>('DATABASE_PASSWORD'),
-    database: config.get<string>('DATABASE_DBNAME'),
+    type: 'postgres' as const,
+    url: config.get<string>('DATABASE_URL'),
+    ssl: {
+      rejectUnauthorized: false, // required for Neon
+    },
     entities: [UserEntity, CredentialsEntity, TransactionEntity],
     synchronize: config.get('NODE_ENV') === 'dev',
   };
