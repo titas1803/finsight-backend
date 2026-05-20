@@ -80,7 +80,7 @@ src/
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/finsight-backend
+git clone https://github.com/titas1803/finsight-backend
 cd finsight-backend
 npm install
 ```
@@ -105,6 +105,9 @@ OPENAI_API_KEY=sk-...
 
 # App
 PORT=3000
+
+#Redis
+REDIS_HOST=redis://localhost:6379
 ```
 
 ### Run
@@ -158,8 +161,6 @@ POST /auth/login
 {
   "message": "Login successful!",
   "user": { "id": "uuid", "email": "...", "role": "USER", ... },
-  "accessToken": "eyJ...",
-  "refreshToken": "eyJ..."
 }
 ```
 
@@ -167,15 +168,10 @@ POST /auth/login
 
 ```json
 POST /auth/refresh
-{
-  "refreshToken": "eyJ..."
-}
 
 // Response
 {
   "message": "Tokens refreshed successfully",
-  "accessToken": "eyJ...",
-  "refreshToken": "eyJ..."
 }
 ```
 
@@ -336,25 +332,6 @@ Register → Login → { accessToken (1h), refreshToken (7d) }
 - Refresh tokens are **bcrypt-hashed** before storage — raw tokens are never persisted
 - Every refresh call **rotates** the token — the old refresh token is immediately invalidated
 - Logout sets `refreshToken = null` in the database, blocking all future refresh attempts
-
----
-
-## Deployment
-
-### Backend → Railway
-
-```bash
-# Connect your GitHub repo on railway.com
-# Set all environment variables in Railway dashboard
-# Railway auto-detects NestJS and deploys on push
-```
-
-### Frontend → Vercel
-
-```bash
-vercel --prod
-# Set VITE_API_URL=https://your-railway-url.railway.app
-```
 
 ---
 

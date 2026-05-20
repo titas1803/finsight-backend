@@ -19,12 +19,28 @@ import { Currentuser } from './decorators/current-user.decorator';
 import { PasswordDto } from './dto/password.dto';
 import { type UserDetailType } from '../types/auth-types';
 import { AuthUrls } from './utils/auth.enum';
-import { type Response, type Request } from 'express';
+import { type Response, type Request, CookieOptions } from 'express';
 import { ReqIpThrottleGuard } from '@/guard/request-throttle.guard';
 import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
+  accessTokenConfig: CookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 15 * 60 * 1000, // 15 mins
+    path: '/',
+  };
+
+  refreshTokenConfig: CookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 15 * 60 * 1000, // 15 mins
+    path: '/',
+  };
+
   constructor(private readonly authService: AuthService) {}
 
   @Post(AuthUrls.REGISTER)
@@ -43,21 +59,9 @@ export class AuthController {
     const { accessToken, message, refreshToken, user } =
       await this.authService.loginUser(loginDto);
 
-    response.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none',
-      maxAge: 15 * 60 * 1000, // 15 mins
-      path: '/',
-    });
+    response.cookie('accessToken', accessToken, this.accessTokenConfig);
 
-    response.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/',
-    });
+    response.cookie('refreshToken', refreshToken, this.refreshTokenConfig);
 
     return {
       message,
@@ -91,25 +95,25 @@ export class AuthController {
       const refreshToken = (request.cookies as { refreshToken: string })
         .refreshToken;
 
+      if (!refreshToken) {
+        throw new UnauthorizedException();
+      }
+
       const tokens = await this.authService.refreshTokens(refreshToken);
 
-      response.cookie('accessToken', tokens.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'none',
-        maxAge: 15 * 60 * 1000, // 15 mins
-        path: '/',
-      });
+      response.cookie(
+        'accessToken',
+        tokens.accessToken,
+        this.accessTokenConfig,
+      );
 
-      response.cookie('refreshToken', tokens.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'none',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        path: '/',
-      });
+      response.cookie(
+        'refreshToken',
+        tokens.refreshToken,
+        this.refreshTokenConfig,
+      );
 
-      return tokens;
+      return { message: 'Tokens refreshed successfully' };
     } else {
       throw new UnauthorizedException();
     }

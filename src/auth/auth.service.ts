@@ -192,7 +192,6 @@ export class AuthService {
     );
 
     return {
-      message: 'Tokens refreshed successfully',
       ...token,
     };
   }

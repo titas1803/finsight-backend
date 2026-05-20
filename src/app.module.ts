@@ -9,6 +9,7 @@ import appConfig from './configs/app.config';
 import dbFactory from './configs/db.config';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -33,7 +34,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 5 }]),
   ],
-  controllers: [],
+  controllers: [AppController],
   providers: [],
 })
 export class AppModule {}
