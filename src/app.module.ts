@@ -24,9 +24,12 @@ import { ThrottlerModule } from '@nestjs/throttler';
       inject: [ConfigService],
       useFactory: dbFactory,
     }),
-    RedisModule.forRoot({
-      type: 'single',
-      url: process.env.REDIS_URL,
+    RedisModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'single',
+        url: config.get<string>('REDIS_HOST'),
+      }),
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 5 }]),
   ],
