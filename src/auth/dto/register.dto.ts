@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsNotEmpty,
@@ -12,8 +13,11 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'Email is required' })
   email!: string;
 
-  @IsPhoneNumber('IN')
   @IsOptional()
+  @Transform(({ value }: { value: string }) =>
+    value === '' ? undefined : value,
+  )
+  @IsPhoneNumber('IN', { message: 'invalid phone number' })
   phoneNumber?: string;
 
   @IsString({ message: 'First name must be a string' })

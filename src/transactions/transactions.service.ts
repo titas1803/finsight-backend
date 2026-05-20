@@ -15,6 +15,7 @@ import {
   findTransactionByTypeAndCategoryRedisKey,
   findTransactionsSummaryRedisKey,
   findTrasactionBySpecificPeriodRedisKey,
+  getInsightRedisKey,
   transactionRedisKeyInital,
 } from '@/utils/redis.util';
 import { InjectRedis } from '@nestjs-modules/ioredis';
@@ -36,45 +37,15 @@ export class TransactionsService {
     await this.redis.set(key, data, 'EX', seconds);
   }
 
-  private async deleteTransactionRedisForuser(
-    userId: string,
-    allOrOthers: 'ALL' | 'OTHERS' = 'ALL',
-    transactionId?: string,
-  ) {
-    if (allOrOthers === 'ALL') {
-      const keys = await this.redis.keys(
-        `${transactionRedisKeyInital(userId)}:*`,
-      );
-      if (keys.length) await this.redis.del(...keys);
-    }
-
-    const findAllRedisKey = await this.redis.keys(
-      `${findAllTransactionsRedisKey(userId)}:*`,
+  private async deleteTransactionRedisForuser(userId: string) {
+    const transactionKeys = await this.redis.keys(
+      `${transactionRedisKeyInital(userId)}:*`,
     );
-    const findSumaryRedisKey = await this.redis.keys(
-      `${findTransactionsSummaryRedisKey(userId)}:*`,
+    const insightsKeys = await this.redis.keys(
+      `${getInsightRedisKey(userId).baseKey}:*`,
     );
-    const findTypeAndCategoryRedisKey = await this.redis.keys(
-      `${transactionRedisKeyInital(userId)}:type:*`,
-    );
-    const findSpecificPeriodRedisKey = await this.redis.keys(
-      `${transactionRedisKeyInital(userId)}:period:*`,
-    );
-
-    if (transactionId) {
-      const findByIdRedisKey = findTransactionByIdRedisKey(
-        transactionId,
-        userId,
-      );
-      await this.redis.del(findByIdRedisKey);
-    }
-
-    await this.redis.del(
-      ...findAllRedisKey,
-      ...findSumaryRedisKey,
-      ...findTypeAndCategoryRedisKey,
-      ...findSpecificPeriodRedisKey,
-    );
+    if (transactionKeys.length) await this.redis.del(...transactionKeys);
+    if (insightsKeys.length) await this.redis.del(...insightsKeys);
   }
 
   /**
@@ -121,7 +92,7 @@ export class TransactionsService {
     const { user: _, ...savedTransaction } =
       await this.transactionRepo.save(newTransaction);
 
-    await this.deleteTransactionRedisForuser(userId, 'OTHERS');
+    await this.deleteTransactionRedisForuser(userId);
 
     return {
       message: `New transaction of ${savedTransaction.amount} is added`,
@@ -285,7 +256,7 @@ export class TransactionsService {
       },
     );
 
-    await this.deleteTransactionRedisForuser(userId, 'OTHERS', transactionId);
+    await this.deleteTransactionRedisForuser(userId);
 
     return {
       message: `${updateResult.affected} transaction data updated`,
@@ -309,7 +280,7 @@ export class TransactionsService {
         "Either transaction not found or you don't have enough permission",
       );
 
-    await this.deleteTransactionRedisForuser(userId, 'OTHERS', transactionId);
+    await this.deleteTransactionRedisForuser(userId);
 
     return {
       message: `${deletedTransaction.affected} transaction records deleted`,
@@ -338,13 +309,14 @@ export class TransactionsService {
 
     const cached = await this.redis.get(findSummaryRedisKey);
 
-    if (cached)
+    if (cached) {
       return JSON.parse(cached) as {
         totalIncome: number;
         totalExpense: number;
         totalInvestment: number;
         transactionCount: number;
       };
+    }
 
     const dbAlias = 'transaction';
     const query = this.transactionRepo
