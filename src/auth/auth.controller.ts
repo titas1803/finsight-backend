@@ -28,7 +28,7 @@ export class AuthController {
   accessTokenConfig: CookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV?.includes('prod') ?? false,
-    sameSite: 'none',
+    sameSite: process.env.NODE_ENV?.includes('prod') ? 'none' : 'lax',
     maxAge: 15 * 60 * 1000, // 15 mins
     path: '/',
   };
@@ -36,7 +36,7 @@ export class AuthController {
   refreshTokenConfig: CookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV?.includes('prod') ?? false,
-    sameSite: 'none',
+    sameSite: process.env.NODE_ENV?.includes('prod') ? 'none' : 'lax',
     maxAge: 15 * 60 * 1000, // 15 mins
     path: '/',
   };
